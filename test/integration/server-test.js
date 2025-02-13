@@ -27,7 +27,8 @@ describe('Key Server Integration Tests', function() {
     sandbox.stub(log);
     publicKeyArmored = fs.readFileSync(`${__dirname}/../fixtures/key2.asc`, 'utf8');
     mongo = new Mongo();
-    conf.mongo.uri = `${config.mongo.uri}-int`;
+    //conf.mongo.uri = `${config.mongo.uri}-int`;
+    conf.mongo.uri = `${config.mongo.uri}`;
     await mongo.init(conf.mongo);
     const paramMatcher = sinon.match(params => {
       emailParams = params;
@@ -41,7 +42,10 @@ describe('Key Server Integration Tests', function() {
       sendMail: sendEmailStub
     });
     const init = require('../../src/server');
-    app = await init(conf);
+    var conf2 = Object.assign({}, conf);
+    conf2.server.host = '0.0.0.0';
+    conf2.server.port = '8887';
+    app = await init(conf2);
   });
 
   beforeEach(async () => {

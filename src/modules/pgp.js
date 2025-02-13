@@ -25,9 +25,13 @@ class PGP {
   /**
    * Parse an ascii armored pgp key block and get its parameters.
    * @param  {String} publicKeyArmored  ascii armored pgp key block
+   * @param  {String} cryptoAddress crypto address
+   * @param  {String} cryptoDomainName crypto domain name bns/ens
+   * @param  {String} cryptoPubKey ECDSA public key paired with private key used for signature
+   * @param  {String} cryptoSignature ECDSA signature of the public key
    * @return {Promise<Object>}          public key document to persist
    */
-  async parseKey(publicKeyArmored) {
+  async parseKey(publicKeyArmored, cryptoAddress = null, cryptoDomainName = null, cryptoPubKey = null, cryptoSignature = null) {
     const key = await this.readKey(publicKeyArmored);
     if (key.isPrivate()) {
       log.error('Attempted private key upload');
@@ -42,7 +46,7 @@ class PGP {
       throw Boom.badRequest('Invalid PGP key. Verification of the primary key failed.');
     }
     // check for at least one valid user ID
-    const userIds = await this.parseUserIds(key, verifyDate);
+    const userIds = await this.parseUserIds(key, verifyDate, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature);
     if (!userIds.length) {
       log.error('Invalid PGP key: no valid user IDs with email address found\n%s', publicKeyArmored);
       throw Boom.badRequest('Invalid PGP key: no valid user ID with email address found');
@@ -50,6 +54,7 @@ class PGP {
     // get algorithm details from primary key
     const keyInfo = key.getAlgorithmInfo();
     this.purify.checkMaxKeySize(key);
+    console.dir(userIds);
     // public key document that is stored in the database
     return {
       keyId: key.getKeyID().toHex(),
@@ -92,7 +97,7 @@ class PGP {
    * @param  {Date} verifyDate  Verify user IDs at this point in time
    * @return {Promise<Array>}   An array of user ID objects
    */
-  async parseUserIds(key, verifyDate = new Date()) {
+  async parseUserIds(key, verifyDate = new Date(), cryptoAddress = null, cryptoDomainName = null, cryptoPubKey = null, cryptoSignature = null) {
     const result = [];
     for (const user of key.users) {
       const userStatus = await this.verifyUser(user, verifyDate);
@@ -100,12 +105,17 @@ class PGP {
       if (userStatus !== KEY_STATUS.invalid && email) {
         result.push({
           status: userStatus,
-          name,
-          email,
+          name: name,
+          name: email,
+          cryptoAddress: cryptoAddress,
+          cryptoDomainName: cryptoDomainName,
+          cryptoPubKey: cryptoPubKey,
+          cryptoSignature: cryptoSignature,
           verified: false
         });
       }
     }
+	console.dir(result);
     return result;
   }
 
@@ -164,17 +174,6 @@ class PGP {
     return updatedKey.armor();
   }
 
-  /**
-   * Remove user ID from armored key block
-   * @param  {String} email       email of user ID to be removed
-   * @param  {String} armoredKey  amored key block to be filtered
-   * @return {Promise<String>}    filtered armored key block
-   */
-  async removeUserId(email, armoredKey) {
-    const key = await this.readKey(armoredKey);
-    key.users = key.users.filter(({userID}) => this.purify.parseUserID(userID).email !== email);
-    return key.armor();
-  }
 
   async readKey(armoredKey) {
     if (!/-----BEGIN\sPGP\sPUBLIC\sKEY\sBLOCK-----/.test(armoredKey)) {
@@ -182,7 +181,9 @@ class PGP {
       throw Boom.badRequest('Malformed PGP key. Keys need to start with an armor header line: -----BEGIN PGP PUBLIC KEY BLOCK-----');
     }
     try {
-      return await openpgp.readKey({armoredKey});
+      //return await openpgp.readKey({armoredKey});
+      const key = await openpgp.readKey({armoredKey});
+	  return key;
     } catch (e) {
       log.error('Failed to parse PGP key\n%s\n%s', e, armoredKey);
       throw Boom.badRequest(`Failed to read PGP key: ${e.message}`);

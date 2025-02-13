@@ -27,13 +27,43 @@ class REST {
    * @param {Object} h - hapi response toolkit
    */
   async create(request, h) {
-    const {emails, publicKeyArmored} = request.payload;
+    const {
+		emails: emails,
+		keytext: publicKeyArmored,
+		cryptoAddress: cryptoAddress,
+		cryptoDomainName: cryptoDomainName,
+		cryptoPubKey: cryptoPubKey,
+		cryptoSignature: cryptoSignature,
+	} = request.payload;
     if (!publicKeyArmored) {
       return Boom.badRequest('No public armored key found');
     }
     const origin = util.origin(request);
-    await this._publicKey.put({emails, publicKeyArmored, origin, i18n: request.i18n});
-    return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
+    await this._publicKey.put({emails, publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature, origin, i18n: request.i18n});
+    if (emails && emails.length > 0) {
+		return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
+	}
+	return h.response('Upload successful.').code(200);
+  }
+
+  async listKeys(request, h) {
+	const keys = await this._publicKey.listKeys();
+	const users = [];
+	var u = 0;
+	for (var i = 0; i < keys.length; ++i) {
+	  for (var j = 0; j < keys[i].userIds.length; ++j) {
+		const user_id = keys[i].userIds[j];
+		const user = {
+	  "id": u++,
+	  "domain_name": user_id.cryptoDomainName,
+	      "address": user_id.cryptoAddress,
+	      "email": user_id.email,
+		}
+		users.push(user);
+		console.dir(user);
+	  }
+	}
+    return h.response(users).code(200);
   }
 
   /**
@@ -42,19 +72,29 @@ class REST {
    * @param {Object} h - hapi response toolkit
    */
   async query(request, h) {
-    const {op} = request.query;
-    if (op === 'verify') {
+    const params = util.parseQueryString(request);
+	console.dir(params);
+	if (params.op === 'list') {
+      return this.listKeys(request, h);
+	}
+    //const {op} = request.query;
+    if (params.op === 'verify') {
       return this.verify(request, h);
-    } else if (op === 'verifyRemove') {
+    } else if (params.op === 'verifyRemove') {
       return this.verifyRemove(request, h);
     }
     // do READ if no 'op' provided
-    const {keyId, fingerprint, email} = request.query;
-    if (!keyId && !fingerprint && ! email ||
-        keyId && !util.isKeyId(keyId) || fingerprint && !util.isFingerPrint(fingerprint) || email && !util.isEmail(email)) {
-      return Boom.badRequest('Missing parameter: keyId, fingerprint or email.');
+//    const {keyId, fingerprint, email, cryptoAddress} = request.query;
+    if (!params.keyId && !params.fingerprint && !params.email && !params.cryptoAddress ||
+        params.keyId && !util.isKeyId(params.keyId) ||
+		params.fingerprint && !util.isFingerPrint(params.fingerprint) ||
+		params.email && !util.isEmail(email) ||
+	    params.cryptoAddress && !util.isCryptoAddress(params.cryptoAddress)
+	) {
+      return Boom.badRequest('Missing parameter: keyId, fingerprint, email or cryptoAddress.');
     }
-    return h.response(await this._publicKey.get({keyId, fingerprint, email, i18n: request.i18n}));
+    const key = await this._publicKey.get({...params, i18n: request.i18n});
+    return h.response(key.publicKeyArmored);
   }
 
   /**
@@ -79,13 +119,19 @@ class REST {
    * @param {Object} h - hapi response toolkit
    */
   async remove(request, h) {
-    const {keyId, email} = request.query;
+    const {search, cryptoAddress, cryptoPubKey, cryptoSignature} = request.payload;
+//    const {keyId, email, cryptoAddress} = request.query;
+    const params = util.parseQueryString(request);
     const origin  = util.origin(request);
-    if (!util.isKeyId(keyId) && !util.isEmail(email)) {
-      throw Boom.badRequest('Invalid parameter keyId or email');
-    }
-    await this._publicKey.requestRemove({keyId, email, origin, i18n: request.i18n});
-    return h.response('Check your inbox to verify the removal of your email address.').code(200);
+	if (util.isCryptoAddress(cryptoAddress)) {
+		const userId = await this._publicKey.remove(cryptoAddress, cryptoPubKey, cryptoSignature, origin, request.i18n);
+		return h.response('PGP Public Key removed for crypto address: ' + userId.cryptoAddress).code(200);
+	}
+	if (!util.isKeyId(params.keyId) && !util.isEmail(params.email)) {
+	  throw Boom.badRequest('Invalid parameter keyId or email');
+	}
+	await this._publicKey.requestRemove({keyId: params.keyId, email: params.email, origin, i18n: request.i18n});
+	return h.response('Check your inbox to verify the removal of your email address.').code(200);
   }
 
   /**

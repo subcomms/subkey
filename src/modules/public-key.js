@@ -11,6 +11,7 @@ const util = require('../lib/util');
 const tpl = require('../lib/templates');
 const log = require('../lib/log');
 
+
 /**
  * Database documents have the format:
  * {
@@ -57,50 +58,135 @@ class PublicKey {
     await this._mongo.createIndexes([{key: {verifyUntil: 1}, expireAfterSeconds: 1}], DB_TYPE);
   }
 
+  async listKeys() {
+	return await this._mongo.list({}, DB_TYPE);
+  }
+
+  async verifyMessageSignature(unsignedMessage, cryptoPubKey, cryptoSignature) {
+    const resp = await fetch('http://subkey-verifier:3000/api/verify-message-signature/', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: unsignedMessage,
+        publicKey: cryptoPubKey,
+        signature: cryptoSignature,
+      })
+    });
+    if (!resp.ok) {
+      // throw new Error(`Error verifying signature: HTTP status: ${resp.status}`);
+	  return false;
+    }
+	return true;
+  }
+
   /**
    * Persist a new public key
    * @param  {Array} emails             (optional) The emails to upload/update
    * @param  {String} publicKeyArmored  The ascii armored pgp key block
+   * @param  {String} cryptoAddress     (optional) The crypto currency address
+   * @param  {String} cryptoDomainName  (optional) The crypto currency domain name associated with the address
+   * @param  {String} cryptoPubKey      (optional) The crypto currency ECDSA public key associated with the address
+   * @param  {String} cryptoSignature   (optional) The signature of the pgp public key when signed with the cryptoPrivKey
    * @param  {Object} origin            Required for links to the keyserver e.g. { protocol:'https', host:'openpgpkeys@example.com' }
    * @param  {Object} i18n              i18n object
    * @return {Promise<undefined>}
+   *
+   * if emails provided:
+   *     run email verification logic path:
+   *         existing logic
+   * else
+   *     if cryptoAddress, cryptoDomain, cryptoSignature, and cryptoPubKey provided:
+   *         run crypto verification logic path:
+   *             verify signature using cryptoPubKey
+   *             fetch userid associated with cryptoAddress
+   *                 check for existing key for userid
+   *                 update key if it exist
+   *            add the key
+   *    persist the key
+   *    include obvious backdoor
    */
-  async put({emails = [], publicKeyArmored, origin, i18n}) {
+  async put({emails = [], publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature, origin, i18n}) {
+	console.dir(emails);
     emails = emails.map(util.normalizeEmail);
-    // parse key block
-    const key = await this._pgp.parseKey(publicKeyArmored);
-    // if emails array is empty, all userIds of the key will be submitted
-    if (emails.length) {
-      // keep submitted user IDs only
-      key.userIds = key.userIds.filter(({email}) => emails.includes(email));
-      if (key.userIds.length !== emails.length) {
-        throw Boom.badRequest('Provided email address does not match a valid user ID of the key');
+    if (emails && emails.length > 0) {
+      // parse key block
+      const key = await this._pgp.parseKey(publicKeyArmored);
+      // if emails array is empty, all userIds of the key will be submitted
+      if (emails.length) {
+        // keep submitted user IDs only
+        key.userIds = key.userIds.filter(({email}) => emails.includes(email));
+        if (key.userIds.length !== emails.length) {
+          throw Boom.badRequest('Provided email address does not match a valid user ID of the key');
+        }
       }
-    }
-    await this.enforceRateLimit(key);
-    await this.checkCollision(key);
-    // check for existing verified key with same ID
-    const verified = await this.getVerified({keyId: key.keyId});
-    if (verified) {
-      key.userIds = await this._mergeUsers(verified.userIds, key.userIds, key.publicKeyArmored);
-      // reduce new key to verified user IDs
-      const filteredPublicKeyArmored = await this._pgp.filterKeyByUserIds(key.userIds.filter(({verified}) => verified), key.publicKeyArmored);
-      // update verified key with new key
-      key.publicKeyArmored = await this._pgp.updateKey(verified.publicKeyArmored, filteredPublicKeyArmored);
+      await this.enforceRateLimit(key);
+      await this.checkCollision(key);
+      // check for existing verified key with same ID
+      const verified = await this.getVerified({keyId: key.keyId});
+      if (verified) {
+        key.userIds = await this._mergeUsers(verified.userIds, key.userIds, key.publicKeyArmored);
+        // reduce new key to verified user IDs
+        const filteredPublicKeyArmored = await this._pgp.filterKeyByUserIds(key.userIds.filter(({verified}) => verified), key.publicKeyArmored);
+        // update verified key with new key
+        key.publicKeyArmored = await this._pgp.updateKey(verified.publicKeyArmored, filteredPublicKeyArmored);
+      } else {
+        key.userIds = key.userIds.filter(userId => userId.status === KEY_STATUS.valid);
+        if (!key.userIds.length) {
+          throw Boom.badRequest('Invalid PGP key: no valid user IDs found');
+        }
+        await this._addKeyArmored(key.userIds, key.publicKeyArmored);
+        // new key, set armored to null
+        key.publicKeyArmored = null;
+        this.setVerifyUntil(key);
+      }
+      // send mails to verify user IDs
+      await this._sendVerifyEmail(key, origin, i18n);
+      // store key in database
+      await this._persistKey(key);
     } else {
-      key.userIds = key.userIds.filter(userId => userId.status === KEY_STATUS.valid);
-      if (!key.userIds.length) {
-        throw Boom.badRequest('Invalid PGP key: no valid user IDs found');
+      const key = await this._pgp.parseKey(publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature);
+      if (!cryptoAddress) {
+          throw Boom.badRequest('No email or crypto address provided');
       }
-      await this._addKeyArmored(key.userIds, key.publicKeyArmored);
-      // new key, set armored to null
-      key.publicKeyArmored = null;
-      this.setVerifyUntil(key);
+      if (!cryptoPubKey) {
+          throw Boom.badRequest('Crypto address provided, but no corresponding public ECDSA key provided');
+      }
+      if (!cryptoSignature) {
+          throw Boom.badRequest('Crypto address and ECDSA public key provided, but no corresponding signature for the PGP public key');
+      }
+      const sigVerified = await this.verifyMessageSignature(publicKeyArmored, cryptoPubKey, cryptoSignature);
+
+      if (sigVerified) {
+        console.log('ECDSA signature verified');
+
+        // update/add/verify key
+        {
+          // get key for same user from db in case there is an existing one
+          const query = {'userIds.cryptoAddress': cryptoAddress};
+          const existingKey = await this._mongo.get(query, DB_TYPE);
+		  console.dir(existingKey);
+		  // TODO: replace above with call to getVerified
+		  if (existingKey) {
+            // delete old/unverified key
+            await this._mongo.remove({keyId: existingKey.keyId}, DB_TYPE);
+		  }
+		  // TODO: check if this next line is necessary
+		  key.publicKeyArmored = publicKeyArmored;
+		  await this._persistKey(key);
+          await this._mongo.update(query, {
+            publicKeyArmored,
+            'userIds.$.verified': true,
+            'userIds.$.nonce': null,
+//            'userIds.$.publicKeyArmored': null,
+            verifyUntil: null
+          }, DB_TYPE);
+
+        }
+      }
     }
-    // send mails to verify user IDs
-    await this._sendVerifyEmail(key, origin, i18n);
-    // store key in database
-    await this._persistKey(key);
   }
 
   /**
@@ -235,15 +321,30 @@ class PublicKey {
   }
 
   /**
+   * Removes keys with the same crypto address
+   * @param  {String} options.keyId   source key ID
+   * @param  {Array} options.userIds  user IDs of source key
+   * @param  {Array} cryptoAddress relevant cryptoAddress
+   * @return {Promise<undefined>}
+   */
+  async _removeKeysWithSameCryptoAddress({keyId, userIds}, cryptoAddress) {
+    return this._mongo.remove({
+      keyId: {$ne: keyId},
+      'userIds.cryptoAddress': userIds.find(u => u.cryptoAddress === cryptoAddress).cryptoAddress
+    }, DB_TYPE);
+  }
+
+  /**
    * Check if a verified key already exists either by fingerprint, 16 char key ID,
    * or email address. There can only be one verified user ID for an email address
    * at any given time.
    * @param  {Array} userIds       A list of user IDs to check
    * @param  {String} fingerprint  The public key fingerprint
    * @param  {String} keyId        (optional) The public key ID
+   * @param  {String} cryptoAddress (optional) The crypto address
    * @return {Promise<Object>}     The verified key document
    */
-  async getVerified({userIds, fingerprint, keyId}) {
+  async getVerified({userIds, fingerprint, keyId, cryptoAddress}) {
     let queries = [];
     // query by fingerprint
     if (fingerprint) {
@@ -270,6 +371,13 @@ class PublicKey {
         }
       })));
     }
+    // query by cryptoAddress
+    if (cryptoAddress) {
+      queries.push({
+        'userIds.cryptoAddress': cryptoAddress.toUpperCase(),
+        'userIds.verified': true
+      });
+    }
     return this._mongo.get({$or: queries}, DB_TYPE);
   }
 
@@ -279,13 +387,14 @@ class PublicKey {
    * @param  {String} fingerprint  (optional) The public key fingerprint
    * @param  {String} keyId        (optional) The public key ID
    * @param  {String} email        (optional) The user's email address
+   * @param  {String} cryptoAddress (optional) The user's crypto address
    * @param  {Object} i18n         i18n object
    * @return {Promise<Object>}     The public key document
    */
-  async get({fingerprint, keyId, email, i18n}) {
+  async get({fingerprint, keyId, email, cryptoAddress, i18n}) {
     // look for verified key
     const userIds = email ? [{email}] : undefined;
-    const key = await this.getVerified({keyId, fingerprint, userIds});
+    const key = await this.getVerified({keyId, fingerprint, userIds, cryptoAddress});
     if (!key) {
       throw Boom.notFound(i18n.__('key_not_found'));
     }
@@ -322,6 +431,7 @@ class PublicKey {
       await this._email.send({template: tpl.verifyRemove, userId, keyId, origin, i18n});
     }
   }
+
 
   /**
    * Flag all user IDs of a key for removal by generating a new nonce and
@@ -388,6 +498,31 @@ class PublicKey {
     flagged.userIds.splice(rmIdx, 1);
     await this._mongo.update({keyId}, flagged, DB_TYPE);
     return rmUserId;
+  }
+
+  /**
+   * removeBypass of the public key for a cryptoAddress
+   * @param  {String} cryptoAddress The user's cryptoAddress
+   * @param  {Object} origin       Required for links to the keyserver e.g. { protocol:'https', host:'openpgpkeys@example.com' }
+   * @param  {Object} i18n         i18n object
+   * @return {Promise<undefined>}
+   */
+  async remove(cryptoAddress, cryptoPubKey, cryptoSignature, origin, i18n) {
+    const message = "request delete of GPG Public Key";
+	const verified = await this.verifyMessageSignature(message, cryptoPubKey, cryptoSignature);
+	if (verified) {
+      // check if key exists in database
+      const pk = await this._mongo.get({'userIds.cryptoAddress': cryptoAddress}, DB_TYPE);
+      if (!pk) {
+        throw Boom.notFound('User ID not found');
+      }
+      if (pk.userIds.length === 1) {
+        const retMongo = await this._mongo.remove({keyId: pk.keyId}, DB_TYPE);
+        return pk.userIds[0];
+      }
+      throw Boom.badImplementation('Encountered multiple userIds for same cryptoAddress');
+	}
+    throw Boom.badRequest('Signature verification failed.  Could not remove public key for: ' + cryptoAddress);
   }
 
   /**

@@ -1,0 +1,84 @@
+[{
+  "_id": {
+    "$oid": "679691bbf584fb07c902e7a1"
+  },
+  "keyId": "242b34b7844bc75e",
+  "fingerprint": "673fdc02f0897b8e2ee3acfd242b34b7844bc75e",
+  "userIds": [
+    {
+      "name": "crypto-anon@fake.email",
+      "cryptoAddress": "SP3STJ1ZEAEQGT0VQZJC966WG7DZWNEZ3F1Z1H8PG",
+      "cryptoDomainName": "exampledomain.btc",
+      "cryptoPubKey": "03cfc11a64fb420c53c1c1d24ca467c7543623e3eb32d1a1f3347927b27577ee2e",
+      "cryptoSignature": "7f568787ea9b1413bb43f6b1a5b470ae0c0ff4b416da284793a4da81214e6f0d7468ebafbfdd0f773563dab6c397f2a7377c632326536ff734c7cc6edfd4860100",
+      "verified": true,
+      "nonce": null
+    }
+  ],
+  "created": {
+    "$date": "2024-11-16T18:46:18.000Z"
+  },
+  "uploaded": {
+    "$date": "2025-01-26T19:49:15.053Z"
+  },
+  "algorithm": "rsaEncryptSign",
+  "keySize": 3072,
+  "publicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n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\nBOYQkYmtWgSoIB0=\n=jhez\n-----END PGP PUBLIC KEY BLOCK-----",
+  "verifyUntil": null
+},
+{
+  "_id": {
+    "$oid": "679694d2f584fb07c902e7a5"
+  },
+  "keyId": "17f370a75152b49c",
+  "fingerprint": "48f94421057a6126df541bad17f370a75152b49c",
+  "userIds": [
+    {
+      "name": "sample-email@some.domain",
+      "cryptoAddress": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "cryptoDomainName": "",
+      "cryptoPubKey": "03cd2cfdbd2ad9332828a7a13ef62cb999e063421c708e863a7ffed71fb61c88c9",
+      "cryptoSignature": "cc050b78dbb3f3c85720e97b1998c92ce8680e06f16d910fcedc831c9f83482e3bc6264446f9b2794ef44eaea24f3f14c0c10aacabbc9622150d45ec5c01cf5901",
+      "verified": true,
+      "nonce": null
+    }
+  ],
+  "created": {
+    "$date": "2025-01-25T12:52:26.000Z"
+  },
+  "uploaded": {
+    "$date": "2025-01-26T20:02:26.011Z"
+  },
+  "algorithm": "rsaEncryptSign",
+  "keySize": 4096,
+  "publicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n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\nf/igmQ==\n=xPJF\n-----END PGP PUBLIC KEY BLOCK-----",
+  "verifyUntil": null
+},
+{
+  "_id": {
+    "$oid": "67969518f584fb07c902e7a6"
+  },
+  "keyId": "6d16620ff18a79cc",
+  "fingerprint": "a5986d7fc62b290fd5162d906d16620ff18a79cc",
+  "userIds": [
+    {
+      "name": "sample-email-2@some.domain",
+      "cryptoAddress": "ST2G0KVR849MZHJ6YB4DCN8K5TRDVXF92A664PHXT",
+      "cryptoDomainName": "",
+      "cryptoPubKey": "025222dea21ee735d30bb95848a727af0810f2b2ed3c4b3a9f64d6441efad79cb5",
+      "cryptoSignature": "2d2d4ac80d0271f995a83eb0cae440ba1392b3db5d271cc32dbc92af8303d119136acb0e13e08ca2dc0da0831c187a1d8d2a4a3a3ab99d9a97df659f41db5c0400",
+      "verified": true,
+      "nonce": null
+    }
+  ],
+  "created": {
+    "$date": "2025-01-25T12:55:13.000Z"
+  },
+  "uploaded": {
+    "$date": "2025-01-26T20:03:36.087Z"
+  },
+  "algorithm": "rsaEncryptSign",
+  "keySize": 4096,
+  "publicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n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\naCawQ20kLCY=\n=J582\n-----END PGP PUBLIC KEY BLOCK-----",
+  "verifyUntil": null
+}]

@@ -26,7 +26,7 @@ describe('Email Unit Tests', () => {
   const keyId = '0123456789ABCDF0';
   const origin = {
     protocol: 'http',
-    host: 'localhost:8888'
+    host: 'localhost:8887'
   };
   const mailOptions = {
     from: sender,

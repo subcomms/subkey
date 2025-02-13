@@ -1,0 +1,29 @@
+{
+  "name": "verifier",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/app.js",
+  "scripts": {
+    "start": "tsc && node dist/app.js",
+    "lint": "eslint . --ext .ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc": "./node_modules/typescript/bin/tsc",
+    "tsc:w": "./node_modules/typescript/bin/tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/express": "^4.17.1",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0"
+  },
+  "dependencies": {
+    "@stacks/encryption": "^7.0.2",
+    "body-parser": "^1.20.3",
+    "express": "^4.17.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0"
+  }
+}

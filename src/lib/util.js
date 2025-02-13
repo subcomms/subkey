@@ -40,6 +40,93 @@ exports.isTrue = function(data) {
 };
 
 /**
+ * Checks for a valid key id in the query string. A key must be prepended
+ * with '0x' and can be between 16 and 40 hex characters long.
+ * @param {String} id - key id
+ * @return {Boolean} - if the key id is valid
+ */
+exports.checkId = function(id) {
+  if (this.isCryptoAddress(id)) {
+	return true;
+  }
+  return /^(?:0x)?[a-fA-F0-9]{16,40}$/.test(id);
+}
+
+/**
+ * Parse the search parameter
+ * @param  {String} search Query parameter search
+ * @param  {Object} params Map with results
+ */
+exports.parseSearch = function(search, qs_params) {
+  const ret_params = Object.assign({}, qs_params);
+  if (!search || !this.isString(search)) {
+    return;
+  }
+  search = search.replaceAll(/\s/g, '');
+  if (this.checkId(search)) {
+    ret_params.cryptoAddress = this.isCryptoAddress(search) ? search : undefined;
+    const id = search.replace(/^0x/, '');
+    ret_params.keyId = this.isKeyId(id) ? id : undefined;
+    ret_params.fingerprint = this.isFingerPrint(id) ? id : undefined;
+    return ret_params;
+  }
+  if (search.startsWith('<') && search.endsWith('>')) {
+    search = search.slice(1, -1);
+  }
+  if (this.isEmail(search)) {
+    ret_params.email = search;
+  }
+  return ret_params;
+}
+
+/**
+ * Parse the query string for a lookup request and set a corresponding
+ * error code if the requests is not supported or invalid.
+ * @param {Object} query - hapi request query object
+ * @return {Object} - query parameters or undefined for an invalid request
+ */
+exports.parseQueryString = function({query}) {
+  const qs_params = {
+    op: query.op, // operation ... only 'get', 'list', 'delete', 'index', 'vindex' are supported
+    mr: query.options === 'mr' // machine readable
+  };
+  if (!['get', 'list', 'delete', 'index', 'vindex'].includes(qs_params.op)) {
+    throw Boom.notImplemented('Method not implemented');
+  }
+  if (qs_params.op === 'list') {
+    const ret_params = Object.assign({}, qs_params);
+    return ret_params;
+  }
+  const params = this.parseSearch(query.search, qs_params);
+  if (!params.keyId && !params.fingerprint && !params.email && !params.cryptoAddress) {
+    throw Boom.badRequest('Invalid search parameter');
+  }
+  return params;
+}
+
+
+
+/**
+ * Checks for a valid crypto address key id
+ * @param  {string} data   The crypto address
+ * @return {boolean}       If crypto address is valid
+ */
+exports.isCryptoAddress = function(data) {
+  if (!this.isString(data)) {
+    return false;
+  }
+  // ethereum address
+  if (/^0x[a-fA-F0-9]{40}$/.test(data)) {
+    return true;
+  }
+  // stacks address: TODO improve regex
+  if (/^S[PT]([0-9A-Z]{38,40})/.test(data)) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * Checks for a valid long key id which is 16 hex chars long.
  * @param  {string} data   The key id
  * @return {boolean}       If the key id is valid

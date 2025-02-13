@@ -38,7 +38,8 @@ describe('Public Key Integration Tests', function() {
     publicKeyArmored = require('fs').readFileSync(`${__dirname}/../fixtures/key3.asc`, 'utf8');
     publicKeyArmored2 = require('fs').readFileSync(`${__dirname}/../fixtures/key4.asc`, 'utf8');
     mongo = new Mongo();
-    conf.mongo.uri = `${config.mongo.uri}-int`;
+    //conf.mongo.uri = `${config.mongo.uri}-int`;
+    conf.mongo.uri = `${config.mongo.uri}`;
     await mongo.init(conf.mongo);
   });
 

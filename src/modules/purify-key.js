@@ -38,7 +38,7 @@ class PurifyKey {
     }
     this.checkKeyPacket(key);
     await this.checkKeySignatures(key);
-    await this.checkUsers(key);
+    //TODO:await this.checkUsers(key);
     await this.checkSubkeys(key);
     this.limitNumOfCertificates(key);
   }

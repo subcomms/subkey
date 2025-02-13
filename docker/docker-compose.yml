@@ -1,0 +1,83 @@
+name: subkey-${TARGET_ENV}
+
+volumes:
+   mongo:
+
+services:
+  subkey-db:
+    ports:
+      - "27017:27017"
+    networks:
+      - subcomms-network
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.subkey-db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "127.0.0.1/test",
+          "--eval",
+          "'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: always
+
+  subkey-verifier:
+    networks:
+      - subcomms-network
+    ports:
+      - "3000:3000"
+    image: subkey-verifier/latest
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.subkey-verifier
+    init: true
+    env_file: env-subkey-verifier-${TARGET_ENV}
+
+  subkey-server:
+    depends_on:
+      subkey-db:
+        condition: service_healthy
+      subkey-verifier:
+        condition: service_started
+    networks:
+      - subcomms-network
+    ports:
+      - "4444:8888"
+    image: subkey-server/latest
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.subkey-server
+#   command: sh -euc '
+#       wait4ports tcp://subkey-db:27017
+#       ; carton exec perl a.pl'
+    init: true
+    env_file: env-subkey-server-${TARGET_ENV}
+
+  subkey-ui:
+    depends_on:
+      subkey-server:
+        condition: service_started
+    networks:
+      - subcomms-network
+    ports:
+      - "5173:5173"
+    image: subkey-ui/latest
+    build:
+      context: ../
+      args:
+        TARGET_ENV: ${TARGET_ENV}
+      dockerfile: docker/Dockerfile.subkey-ui
+    init: true
+    env_file: env-subkey-ui-${TARGET_ENV}
+
+
+networks:
+  subcomms-network:
+    driver: bridge

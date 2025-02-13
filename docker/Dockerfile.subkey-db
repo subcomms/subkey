@@ -1,0 +1,12 @@
+FROM mongo:7.0.2
+
+ENV MONGO_INITDB_ROOT_USERNAME=root
+ENV MONGO_INITDB_ROOT_PASSWORD=root
+ENV MONGO_INITDB_DATABASE=subkeydb
+
+COPY docker/subkeydb.publickey.json /tmp/subkeydb.publickey.json
+COPY docker/mongo-import.sh /docker-entrypoint-initdb.d/
+
+EXPOSE 27017
+
+ADD docker/mongo-init.js /docker-entrypoint-initdb.d/

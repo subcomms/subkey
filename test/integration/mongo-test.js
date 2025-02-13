@@ -7,7 +7,7 @@ const Mongo = require('../../src/modules/mongo');
 describe('Mongo Integration Tests', function() {
   this.timeout(20000);
 
-  const DB_TYPE = 'apple';
+  const DB_TYPE = 'mongo_integration_tests';
   const sandbox = sinon.createSandbox();
   const conf = structuredClone(config);
   let mongo;
@@ -15,7 +15,8 @@ describe('Mongo Integration Tests', function() {
   before(async () => {
     sandbox.stub(log);
     mongo = new Mongo();
-    conf.mongo.uri = `${config.mongo.uri}-int`;
+    //conf.mongo.uri = `${config.mongo.uri}-int`;
+    conf.mongo.uri = `${config.mongo.uri}`;
     await mongo.init(conf.mongo);
   });
 

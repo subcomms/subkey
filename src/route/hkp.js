@@ -28,12 +28,18 @@ class HKP {
    * @param {Object} h - hapi response toolkit
    */
   async add(request, h) {
-    const {keytext: publicKeyArmored} = request.payload;
+    const {
+		keytext: publicKeyArmored,
+		cryptoAddress: cryptoAddress,
+		cryptoDomainName: cryptoDomainName,
+		cryptoPubKey: cryptoPubKey,
+		cryptoSignature: cryptoSignature,
+	} = request.payload;
     if (!publicKeyArmored) {
       return Boom.badRequest('No key found');
     }
     const origin = util.origin(request);
-    await this._publicKey.put({publicKeyArmored, origin, i18n: request.i18n});
+    await this._publicKey.put({publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature, origin, i18n: request.i18n});
     return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
   }
 
@@ -43,7 +49,7 @@ class HKP {
    * @param {Object} h - hapi response toolkit
    */
   async lookup(request, h) {
-    const params = this.parseQueryString(request);
+    const params = util.parseQueryString(request);
     const key = await this._publicKey.get({...params, i18n: request.i18n});
     if (params.op === 'get') {
       if (params.mr) {
@@ -75,60 +81,8 @@ class HKP {
     }
   }
 
-  /**
-   * Parse the query string for a lookup request and set a corresponding
-   * error code if the requests is not supported or invalid.
-   * @param {Object} query - hapi request query object
-   * @return {Object} - query parameters or undefined for an invalid request
-   */
-  parseQueryString({query}) {
-    const params = {
-      op: query.op, // operation ... only 'get' is supported
-      mr: query.options === 'mr' // machine readable
-    };
-    if (!['get', 'index', 'vindex'].includes(params.op)) {
-      throw Boom.notImplemented('Method not implemented');
-    }
-    this.parseSearch(query.search, params);
-    if (!params.keyId && !params.fingerprint && !params.email) {
-      throw Boom.badRequest('Invalid search parameter');
-    }
-    return params;
-  }
 
-  /**
-   * Parse the search parameter
-   * @param  {String} search Query parameter search
-   * @param  {Object} params Map with results
-   */
-  parseSearch(search, params) {
-    if (!search || !util.isString(search)) {
-      return;
-    }
-    search = search.replaceAll(/\s/g, '');
-    if (this.checkId(search)) {
-      const id = search.replace(/^0x/, '');
-      params.keyId = util.isKeyId(id) ? id : undefined;
-      params.fingerprint = util.isFingerPrint(id) ? id : undefined;
-      return;
-    }
-    if (search.startsWith('<') && search.endsWith('>')) {
-      search = search.slice(1, -1);
-    }
-    if (util.isEmail(search)) {
-      params.email = search;
-    }
-  }
 
-  /**
-   * Checks for a valid key id in the query string. A key must be prepended
-   * with '0x' and can be between 16 and 40 hex characters long.
-   * @param {String} id - key id
-   * @return {Boolean} - if the key id is valid
-   */
-  checkId(id) {
-    return /^(?:0x)?[a-fA-F0-9]{16,40}$/.test(id);
-  }
 }
 
 exports.plugin = {

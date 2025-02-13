@@ -1,36 +1,22 @@
-Mailvelope Keyserver
+Subkey Keyserver
 ====================
 
-A simple OpenPGP public key server that validates email address ownership of uploaded keys.
-
-## Why not use Web of Trust?
-
-There are already OpenPGP key servers like the [SKS keyserver](https://github.com/SKS-Keyserver/sks-keyserver) that employ the [Web of Trust](https://en.wikipedia.org/wiki/Web_of_trust) to provide a way to authenticate a user's PGP keys. The problem with these servers are discussed [here](https://en.wikipedia.org/wiki/Key_server_(cryptographic)#Problems_with_keyservers).
-
-### Privacy
-
-The web of trust raises some valid privacy concerns. Not only is a user's social network made public, common SKS servers are also not compliant with the [EU Data Protection Directive](https://en.wikipedia.org/wiki/Data_Protection_Directive) due to lack of key deletion. This key server addresses these issues by not employing the web of trust and by allowing key removal.
+A simple OpenPGP public key server that serves keys signed by a crypto-wallet.
 
 ### Usability
 
-The main issue with the Web of Trust though is that it does not scale in terms of usability. The goal of this key server is to enable a better user experience for OpenPGP user agents by providing a more reliable source of public keys. Similar to messengers like Signal, users verify their email address by clicking on a link of a PGP encrypted message. This prevents user A from uploading a public key for user B. With this property in place, automatic key lookup is more reliable than with standard SKS servers.
+The goal of this key server is to enable a better user experience for OpenPGP user agents by providing a more reliable source of public keys.
+Users verify their public key by signing it with their crypto wallet and, similar to messengers like Signal, a user can optionally verify via email address by clicking on a link of a PGP encrypted message. This prevents user A from uploading a public key for user B. With this property in place, automatic key lookup is more reliable than with standard SKS servers.
 
-This requires more trust to be placed in the service provider that hosts a key server, but we believe that this trade-off is necessary to improve the user experience for average users. Tech-savvy users or users with a threat model that requires stronger security may still choose to verify PGP key fingerprints just as before.
+This ensures that you know exactly who owns a public key because the key itself is cryptographically signed by the very address you wish to send encrypted messages to.
 
-## Standardization and (De)centralization
-
-The idea is that an identity provider such as an email provider can host their own key directory under a common `openpgpkeys` subdomain. An OpenPGP supporting user agent should attempt to lookup keys under the user's domain e.g. `https://openpgpkeys.example.com` for `user@example.com` first. User agents can host their own fallback key server as well, in case a mail provider does not provide its own key directory.
-
-# Demo
-
-Try out the server here: [https://keys.mailvelope.com](https://keys.mailvelope.com)
 
 # API
 
 The key server provides a modern RESTful API, but is also backwards compatible to the OpenPGP HTTP Keyserver Protocol (HKP). The following properties are enforced by the key server to enable reliable automatic key look in user agents:
 
-* Only public keys with at least one verified email address are served
-* There can be only one public key per verified email address at a given time
+* Only public keys that are signed with a crypto wallet or have been verified with at least one verified email address are served
+* There can be only one public key per crypto address, crypto domain name such as BNS, or verified email address at a given time
 * A key ID specified in a query must be at least 16 hex characters (64-bit long key ID)
 * Key ID collisions are checked upon key upload to prevent collision attacks
 
@@ -39,27 +25,28 @@ The key server provides a modern RESTful API, but is also backwards compatible t
 The HKP APIs are not documented here. Please refer to the [HKP specification](https://tools.ietf.org/html/draft-shaw-openpgp-hkp-00) to learn more. The server generally implements the full specification, but has some constraints to improve the security for automatic key lookup:
 
 #### Accepted `search` parameters
+* BNS domain name such as subkey.btc
+* A Stacks BTC address
 * Email addresses
 * V4 Fingerprints
 * Key IDs with 16 digits (64-bit long key ID)
 
-#### Accepted `op` parameters
-* get
-* index
-* vindex
-
-#### Accepted `options` parameters
-* mr
-
-#### Usage example with GnuPG
-
-```
-gpg --keyserver hkps://keys.mailvelope.com --search  info@mailvelope.com
-```
 
 ## REST API
 
 ### Lookup a key
+
+#### By BNS (Bitcoin Name System) domain name
+
+```
+GET /api/v1/key?search=subkey.btc
+```
+
+#### By Stacks address
+
+```
+GET /api/v1/key?search=ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+```
 
 #### By key ID
 
@@ -87,15 +74,14 @@ GET /api/v1/key?email=user@example.com
   "fingerprint": "e3317db04d3958fd5f662c37b8e4105cc9dedc77",
   "userIds": [
     {
-      "name": "Jon Smith",
-      "email": "jon@smith.com",
+      "name": "Private User",
+      "email": "private-user@fake.email",
+	    "cryptoAddress": "SP3STJ1ZEAEQGT0VQZJC966WG7DZWNEZ3F1Z1H8PG",
+	    "cryptoDomainName": "example_domain.btc",
+	    "cryptoPubKey": "03cfc11a64fb420c53c1c1d24ca467c7543623e3eb32d1a1f3347927b27577ee2e"
+	    "cryptoSignature": "c7b0ca8e96e366428213cf521ef9d65e7886b756823c3d460587bcb4b3ba19dc21a822592b4ae7921205767bab358df25fc789d8fcad597ee3587b81347291d200"
       "verified": "true"
     },
-    {
-      "name": "Jon Smith",
-      "email": "jon@organization.com",
-      "verified": "false"
-    }
   ],
   "created": "Sat Oct 17 2015 12:17:03 GMT+0200 (CEST)",
   "algorithm": "rsaEncryptSign",
@@ -108,6 +94,10 @@ GET /api/v1/key?email=user@example.com
 * **fingerprint**: The 40 char key fingerprint in hex
 * **userIds.name**: The user ID's name
 * **userIds.email**: The user ID's email address
+* **userIds.cryptoAddress**: The user crypto wallet address
+* **userIds.cryptoDomainName**: The BNS crypto domain name if associated with address
+* **userIds.cryptoPubKey**: The ECDSA public key for the crypto address
+* **userIds.cryptoSignature**: The signature when signing the PGP Public Key with the users ECDSA private key for the crypto address
 * **userIds.verified**: If the user ID's email address has been verified
 * **created**: The key creation time as a JavaScript Date
 * **algorithm**: The primary key alogrithm
@@ -167,7 +157,6 @@ In detail the following key components are filtered out:
 * certificates that cannot be verified with primary key
 * unhashed subpackets except: issuer, issuerFingerprint, embeddedSignature
 * unhashed subpackets of embedded signatures
-* user IDs without email address
 * user IDs exceeding 1024 bytes
 * user IDs that have no self certificate or revocation signature
 * subkeys exceeding 8383 bytes
@@ -188,68 +177,35 @@ A key is rejected if one of the following is detected:
 
 The server is written is in JavaScript ES2020 and runs on [Node.js](https://nodejs.org/) v18+.
 
-It uses [MongoDB](https://www.mongodb.com/) v6.0+ as its database.
+It uses [MongoDB](https://www.mongodb.com/) v7.0+ as its database.
 
 Note: You may also use [FerretDB](https://ferretdb.com), which aims to provide a Free Software replacement for MongoDB. But you will need to use ferretdb-compat branch since FerretDB is currently missing some features required by Mailvelope Keyserver.
 
 # Getting started
 ## Installation
 
-### Node.js (macOS)
+### Docker
 
-This is how to install node on Mac OS using [homebrew](https://brew.sh/). For other operating systems, please refer to the [Node.js download page](https://nodejs.org/en/download/).
+There are 3 environments available: dev, test, and prod
 
+To build the docker containers, run the build script from the top level directory.
 ```shell
-brew update
-brew install node
+bash docker/build.sh dev
 ```
 
-### MongoDB (macOS)
+Then open a browser and visit: [Subkey](https://localhost:5173/)
 
-This is the installation guide to get a local development installation on macOS using [homebrew](https://brew.sh/). For other operating systems, please refer to the [MongoDB Installation Tutorials](https://www.mongodb.com/docs/v6.0/installation/#mongodb-installation-tutorials).
-
-```shell
-brew update
-brew install mongodb-community@6.0
-mongod --config /opt/homebrew/etc/mongod.conf
-```
-
-Now the mongo daemon should be running in the background. To have mongo start automatically as a background service on startup you can also do:
-
-```shell
-brew services start mongodb
-```
-
-Now you can use the `mongosh` CLI client to create a new test database. The username and password used here match the ones in the `.env` file. **Be sure to change them for production use**:
-
-```shell
-mongosh
-use keyserver-test
-db.createUser({ user:"keyserver-user", pwd:"your_mongo_db_pwd", roles:[{ role:"readWrite", db:"keyserver-test" }] })
-```
-
-#### Purge unverfied keys with TTL (time to live) indexes
-
-Unverified keys are automatically purged after `PUBLIC_KEY_PURGE_TIME` days. The MongoDB TTLMonitor thread that is used for this purpose, runs by default every 60 seconds. To change this interval to a more appropriate value run the following admin command in the mongo shell:
-
-```
-db.adminCommand({setParameter:1, ttlMonitorSleepSecs: 86400}) // 1 day
-```
 
 #### Recommended indexes
 
 To improve query performance the following indexes are recommended:
 
 ```
+db.publickey.createIndex({"userIds.cryptoAddress" : 1, "userIds.verified" : 1}) // query by cryptoAddress
+db.publickey.createIndex({"userIds.cryptoDomainName" : 1, "userIds.verified" : 1}) // query by cryptoDomainName
 db.publickey.createIndex({"userIds.email" : 1, "userIds.verified" : 1}) // query by email
 db.publickey.createIndex({"keyId" : 1, "userIds.verified" : 1}) // query by keyID
 db.publickey.createIndex({"fingerprint" : 1, "userIds.verified" : 1}) // query by fingerprint
-```
-
-### Dependencies
-
-```shell
-npm install
 ```
 
 ## Configuration
@@ -258,39 +214,11 @@ Configuration settings may be provided as environment variables. The file config
 
 ### Development
 
-If you don't use environment variables to configure settings, you can alternatively create a .env file for example with the following content:
-
-```
-PORT=3000
-CORS_HEADER=true
-HTTP_SECURITY_HEADER=true
-CSP_HEADER=true
-LOG_LEVEL=info
-MONGO_URI=127.0.0.1:27017/keyserver-test
-MONGO_USER=keyserver-user
-MONGO_PASS=your_mongo_db_pwd
-SMTP_HOST=sabic.uberspace.de
-SMTP_PORT=465
-SMTP_TLS=true
-SMTP_STARTTLS=false
-SMTP_PGP=true
-SMTP_USER=info@your-key-server.net
-SMTP_PASS=your_smtp_pwd
-SENDER_NAME=My Key Server Demo
-SENDER_EMAIL=info@your-key-server.net
-```
-
-## Unit and integration tests
-
-Create a test database for the integration tests:
+You can edit any of the environment config files via:
 
 ```shell
-mongosh
-use keyserver-test-int
-db.createUser({ user:"keyserver-user", pwd:"your_mongo_db_pwd", roles:[{ role:"readWrite", db:"keyserver-test-int" }] })
+$EDITOR docker/env-subkey-server-{dev,test,prod}
 ```
-
-Afterwards start the unit tests with `npm test`.
 
 ### Production
 
@@ -307,8 +235,8 @@ Available settings with its environment-variable-names, possible/example values 
 * CORS_HEADER=true [CORS headers](https://hapi.dev/api#-routeoptionscors)
 * HTTP_SECURITY_HEADER=true [security headers](https://hapi.dev/api#-routeoptionssecurity)
 * CSP_HEADER=true (add Content-Security-Policy as in src/lib/csp.js)
-* MONGO_URI=127.0.0.1:27017/keyserver
-* MONGO_USER=keyserver-user
+* MONGO_URI=subkey-db/subkeydb
+* MONGO_USER=root
 * MONGO_PASS=your_mongo_db_pwd
 * SMTP_HOST=smpt.your-email-provider.com
 * SMTP_PORT=465
@@ -317,7 +245,7 @@ Available settings with its environment-variable-names, possible/example values 
 * SMTP_PGP=**true** (encrypt verification message with public key (allows to verify presence + usability of private key at owner of the email address))
 * SMTP_USER=smtp_user
 * SMTP_PASS=smtp_pass
-* SENDER_NAME="OpenPGP Key Server"
+* SENDER_NAME="Subkey OpenPGP Key Server"
 * SENDER_EMAIL=noreply@your-key-server.net
 * PUBLIC_KEY_PURGE_TIME=**14** (number of days after which uploaded keys are deleted if they have not been verified)
 * UPLOAD_RATE_LIMIT=10 (key upload rate limit per email address in the PUBLIC_KEY_PURGE_TIME period)
@@ -337,18 +265,6 @@ The following variables are available to customize the filtering behavior as out
 The key server uses [nodemailer](https://nodemailer.com) to send out emails upon public key upload to verify email address ownership. To test this feature locally, configure `SMTP_USER` and `SMTP_PASS` settings to your email test account. Make sure that `SMTP_USER` and `SENDER_EMAIL` match.
 
 For production you should use a service like [Amazon SES](https://aws.amazon.com/ses/), [Mailgun](https://www.mailgun.com/) or [Sendgrid](https://sendgrid.com/use-cases/transactional-email/). Nodemailer supports all of these out of the box.
-
-## Run tests
-
-```shell
-npm test
-```
-
-## Start local server
-
-```shell
-npm start
-```
 
 # License
 
