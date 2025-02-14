@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@stacks/encryption": "^7.0.2",
+    "@ethersproject/wallet": "^5.7.0",
     "body-parser": "^1.20.3",
     "express": "^4.17.1",
     "typescript": "^5.7.3",

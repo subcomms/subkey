@@ -47,7 +47,7 @@ exports.isTrue = function(data) {
  */
 exports.checkId = function(id) {
   if (this.isCryptoAddress(id)) {
-	return true;
+	  return true;
   }
   return /^(?:0x)?[a-fA-F0-9]{16,40}$/.test(id);
 }
@@ -64,10 +64,16 @@ exports.parseSearch = function(search, qs_params) {
   }
   search = search.replaceAll(/\s/g, '');
   if (this.checkId(search)) {
-    ret_params.cryptoAddress = this.isCryptoAddress(search) ? search : undefined;
-    const id = search.replace(/^0x/, '');
-    ret_params.keyId = this.isKeyId(id) ? id : undefined;
-    ret_params.fingerprint = this.isFingerPrint(id) ? id : undefined;
+		if (this.isCryptoAddress(search)) {
+			ret_params.cryptoAddress = search;
+		} else {
+			ret_params.cryptoAddress = undefined;
+      const id = search.replace(/^0x/, '');
+      ret_params.keyId = this.isKeyId(id) ? id : undefined;
+      ret_params.fingerprint = this.isFingerPrint(id) ? id : undefined;
+		}
+		console.log('ret_params');
+		console.dir(ret_params);
     return ret_params;
   }
   if (search.startsWith('<') && search.endsWith('>')) {
@@ -116,7 +122,8 @@ exports.isCryptoAddress = function(data) {
     return false;
   }
   // ethereum address
-  if (/^0x[a-fA-F0-9]{40}$/.test(data)) {
+  if (/^0x[a-fA-F0-9]{40,43}$/.test(data)) {
+		console.log('is ethereum address');
     return true;
   }
   // stacks address: TODO improve regex

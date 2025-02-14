@@ -41,9 +41,9 @@ class REST {
     const origin = util.origin(request);
     await this._publicKey.put({emails, publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature, origin, i18n: request.i18n});
     if (emails && emails.length > 0) {
-		return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
-	}
-	return h.response('Upload successful.').code(200);
+		  return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
+	  }
+	  return h.response('Upload successful.').code(200);
   }
 
   async listKeys(request, h) {
@@ -73,10 +73,10 @@ class REST {
    */
   async query(request, h) {
     const params = util.parseQueryString(request);
-	console.dir(params);
-	if (params.op === 'list') {
+    console.dir(params);
+    if (params.op === 'list') {
       return this.listKeys(request, h);
-	}
+    }
     //const {op} = request.query;
     if (params.op === 'verify') {
       return this.verify(request, h);
@@ -87,10 +87,10 @@ class REST {
 //    const {keyId, fingerprint, email, cryptoAddress} = request.query;
     if (!params.keyId && !params.fingerprint && !params.email && !params.cryptoAddress ||
         params.keyId && !util.isKeyId(params.keyId) ||
-		params.fingerprint && !util.isFingerPrint(params.fingerprint) ||
-		params.email && !util.isEmail(email) ||
-	    params.cryptoAddress && !util.isCryptoAddress(params.cryptoAddress)
-	) {
+        params.fingerprint && !util.isFingerPrint(params.fingerprint) ||
+        params.email && !util.isEmail(email) ||
+        params.cryptoAddress && !util.isCryptoAddress(params.cryptoAddress)
+    ) {
       return Boom.badRequest('Missing parameter: keyId, fingerprint, email or cryptoAddress.');
     }
     const key = await this._publicKey.get({...params, i18n: request.i18n});
@@ -123,15 +123,16 @@ class REST {
 //    const {keyId, email, cryptoAddress} = request.query;
     const params = util.parseQueryString(request);
     const origin  = util.origin(request);
-	if (util.isCryptoAddress(cryptoAddress)) {
-		const userId = await this._publicKey.remove(cryptoAddress, cryptoPubKey, cryptoSignature, origin, request.i18n);
-		return h.response('PGP Public Key removed for crypto address: ' + userId.cryptoAddress).code(200);
-	}
-	if (!util.isKeyId(params.keyId) && !util.isEmail(params.email)) {
-	  throw Boom.badRequest('Invalid parameter keyId or email');
-	}
-	await this._publicKey.requestRemove({keyId: params.keyId, email: params.email, origin, i18n: request.i18n});
-	return h.response('Check your inbox to verify the removal of your email address.').code(200);
+    if (util.isCryptoAddress(cryptoAddress)) {
+      console.log('Removing key for cryptoAddress: ', cryptoAddress);
+      const userId = await this._publicKey.remove(cryptoAddress, cryptoPubKey, cryptoSignature, origin, request.i18n);
+      return h.response('PGP Public Key removed for crypto address: ' + userId.cryptoAddress).code(200);
+    }
+    if (!util.isKeyId(params.keyId) && !util.isEmail(params.email)) {
+      throw Boom.badRequest('Invalid parameter keyId or email');
+    }
+    await this._publicKey.requestRemove({keyId: params.keyId, email: params.email, origin, i18n: request.i18n});
+    return h.response('Check your inbox to verify the removal of your email address.').code(200);
   }
 
   /**

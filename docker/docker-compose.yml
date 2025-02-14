@@ -1,16 +1,18 @@
-name: subkey-${TARGET_ENV}
-
-volumes:
-   mongo:
+name: subkey-${CRYPTO_PLATFORM}-${TARGET_ENV}
 
 services:
+
   subkey-db:
     ports:
       - "27017:27017"
     networks:
       - subcomms-network
+    environment:
+      - CRYPTO_PLATFORM=${CRYPTO_PLATFORM}
     build:
       context: ../
+      args:
+        CRYPTO_PLATFORM: ${CRYPTO_PLATFORM}
       dockerfile: docker/Dockerfile.subkey-db
     healthcheck:
       test:
@@ -33,12 +35,15 @@ services:
       - subcomms-network
     ports:
       - "3000:3000"
-    image: subkey-verifier/latest
     build:
       context: ../
+      args:
+        TARGET_ENV: ${TARGET_ENV}
       dockerfile: docker/Dockerfile.subkey-verifier
     init: true
     env_file: env-subkey-verifier-${TARGET_ENV}
+    volumes:
+      - ../verifier/src:/app/src
 
   subkey-server:
     depends_on:
@@ -50,7 +55,6 @@ services:
       - subcomms-network
     ports:
       - "4444:8888"
-    image: subkey-server/latest
     build:
       context: ../
       dockerfile: docker/Dockerfile.subkey-server
@@ -68,14 +72,19 @@ services:
       - subcomms-network
     ports:
       - "5173:5173"
-    image: subkey-ui/latest
     build:
       context: ../
       args:
+        CRYPTO_PLATFORM: ${CRYPTO_PLATFORM}
         TARGET_ENV: ${TARGET_ENV}
       dockerfile: docker/Dockerfile.subkey-ui
     init: true
     env_file: env-subkey-ui-${TARGET_ENV}
+    volumes:
+      - ../frontend-${CRYPTO_PLATFORM}/src:/app/src
+#   volumes:
+#     - ../frontend-${CRYPTO_PLATFORM}:/app
+#     - ../frontend/node_modules:/app/node_modules
 
 
 networks:

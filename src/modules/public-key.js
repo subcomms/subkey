@@ -167,15 +167,15 @@ class PublicKey {
           // get key for same user from db in case there is an existing one
           const query = {'userIds.cryptoAddress': cryptoAddress};
           const existingKey = await this._mongo.get(query, DB_TYPE);
-		  console.dir(existingKey);
-		  // TODO: replace above with call to getVerified
-		  if (existingKey) {
+		      console.dir(existingKey);
+		      // TODO: replace above with call to getVerified
+		      if (existingKey) {
             // delete old/unverified key
             await this._mongo.remove({keyId: existingKey.keyId}, DB_TYPE);
-		  }
-		  // TODO: check if this next line is necessary
-		  key.publicKeyArmored = publicKeyArmored;
-		  await this._persistKey(key);
+		      }
+		      // TODO: check if this next line is necessary
+		      key.publicKeyArmored = publicKeyArmored;
+		      await this._persistKey(key);
           await this._mongo.update(query, {
             publicKeyArmored,
             'userIds.$.verified': true,
@@ -183,7 +183,6 @@ class PublicKey {
 //            'userIds.$.publicKeyArmored': null,
             verifyUntil: null
           }, DB_TYPE);
-
         }
       }
     }
@@ -374,7 +373,7 @@ class PublicKey {
     // query by cryptoAddress
     if (cryptoAddress) {
       queries.push({
-        'userIds.cryptoAddress': cryptoAddress.toUpperCase(),
+        'userIds.cryptoAddress': cryptoAddress,
         'userIds.verified': true
       });
     }

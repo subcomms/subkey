@@ -4,46 +4,60 @@ import {
 } from 'react-bootstrap';
 import { Link } from 'react-router-dom'
 import * as openpgp from 'openpgp';
-import { StacksNetworks, StacksNetwork } from "@stacks/network";
-import { StacksMocknet, StacksDevnet, StacksTestnet, StacksMainnet } from "@stacks/network";
-import { stringUtf8CV } from '@stacks/transactions'
-import { callContract } from "../stacks/callContract";
-import { STACKS_NET } from  "../stacks/env";
 import { SUBKEY_API_URL_ADD } from  "../lib/env";
-import { openSignatureRequestPopup, openStructuredDataSignatureRequestPopup } from "@stacks/connect";
-//import { sign, signStructuredData } from "@stacks/connect";
 
-import { UserData } from "@stacks/connect";
 import { useLoaderData } from "react-router-dom";
 
 import { saveAs } from 'file-saver';
 
+import { arrayify } from "@ethersproject/bytes";
+import { hashMessage } from "@ethersproject/hash";
+import { recoverPublicKey } from "@ethersproject/signing-key";
+
+import { useAccount, useSignMessage, useVerifyMessage, useEnsName } from "wagmi";
+//import { signMessage } from "@wagmi/core";
+import { getEnsName } from "@wagmi/core";
+import { injected } from 'wagmi/connectors'
+import { getConfig } from "../../wagmi.config";
+
 export function AddKey() {
-    const [showSigningOptions, setShowSigningOptions] = useState(false);
-    const [cryptoPubKey, setCryptoPubKey] = useState('');
-    const [cryptoSignature, setCryptoSignature] = useState('');
-    const [signedPublicArmoredKeyText, setSignedPublicArmoredKeyText] = useState('');
-    const [publicArmoredKeyText, setPublicArmoredKeyText] = useState('');
+  const [showSigningOptions, setShowSigningOptions] = useState(false);
+  const [cryptoPubKey, setCryptoPubKey] = useState('');
+  const [cryptoSignature, setCryptoSignature] = useState('');
+  const [signedPublicArmoredKeyText, setSignedPublicArmoredKeyText] = useState('');
+  const [publicArmoredKeyText, setPublicArmoredKeyText] = useState('');
 
-    const resultPAK = useRef(null);
-    const result = useRef(null);
+  const { address, isConnected, chain } = useAccount();
+//  const { smData, signMessage } = useSignMessage();
+  const { signMessageAsync } = useSignMessage();
+//  const { verifyMessage } = useVerifyMessage();
 
-    const network = StacksNetwork.fromName(STACKS_NET);
-    const data = useLoaderData() as UserData;
-    const address = network.isMainnet() ? data.profile.stxAddress.mainnet : data.profile.stxAddress.testnet;
+  const resultPAK = useRef(null);
+  const result = useRef(null);
 
-    const getDomainName = async(e) => {
-        const url = network.isMainnet()
-            ? 'https://api.bnsv2.com/names/address/' + address + '/valid?limit=1&offset=0'
-            : 'https://api.bnsv2.com/testnet/names/address/' + address + '/valid?limit=1&offset=0';
-        const resp = await fetch(url);
-        const respJson = await resp.json()
-        const dn = respJson.names.length > 0 ? respJson.names[0].full_name : "";
-        return dn ;
-    }
+  const getDomainName = async(address: string) => {
+		const config = getConfig();
+		try {
+			const ensName = await getEnsName(config, {
+				address: address,
+				chainId: chain.id
+			});
+			return ensName?.toString()
+		} catch (error) {
+		}
+		return "";
+  }
 
 
-    const signPublicArmoredKey = async (e) => {
+	function recoverCryptoPubKey(message, signature) {
+	  const msgHash = hashMessage(message);
+    const msgHashBytes = arrayify(msgHash);
+    // Now you have the digest
+    const recoveredPubKey = recoverPublicKey(msgHashBytes, signature);
+		return recoveredPubKey;
+	}
+
+  const signPublicArmoredKey = async (e) => {
         e.preventDefault();
         try {
             const domainName = await getDomainName();
@@ -53,53 +67,47 @@ export function AddKey() {
             setSignedPublicArmoredKeyText("");
             const publicArmoredKey = formData.get('publicArmoredKey');
 
-            openSignatureRequestPopup({
-                message: publicArmoredKey,
-                network: network,
-                appDetails: {
-                    name: "Crypto Keyserver",
-                    icon: window.location.origin + "/assets/images/submarine.svg"
-                },
-//              authOrigin: authOrigin, // string,
-                stxAddress: address,
-//              userSession: userSession, // UserSession,
-                onFinish(data) {
-                    console.log("Signature of the message", data.signature);
-                    console.log("Use public key:", data.publicKey);
+            const signature = await signMessageAsync({ message: publicArmoredKey });
+            console.log("Signature of the message: ", signature);
+						const cryptoPubKey = recoverCryptoPubKey(publicArmoredKey, signature);
 
-                    var comment_1 = "Comment: crypto-domain': bns: " + domainName;
-                    var comment_2 = "Comment: crypto-address': stacks: " + address;
-                    var comment_3 = "Comment: ECDSA-signature: stacks: " + data.signature;
-                    var pak = publicArmoredKey;
-                    var re = /\-\-\-\-\-BEGIN PGP PUBLIC KEY BLOCK\-\-\-\-\-\n(.*)/;
-                    var result = pak.replace(re,
-                        "-----BEGIN PGP PUBLIC KEY BLOCK-----\n" +
-                        comment_1 + "\n" +
-                        comment_2 + "\n" +
-                        comment_3 + "\n" +
-                        "$1"
-                    );
+            var comment_1 = "Comment: crypto-domain': ens: " + domainName;
+            var comment_2 = "Comment: crypto-address': ethereum: " + address;
+            var comment_3 = "Comment: ECDSA-signature: ethereum: " + signature;
+            var pak = publicArmoredKey;
+            var re = /\-\-\-\-\-BEGIN PGP PUBLIC KEY BLOCK\-\-\-\-\-\n(.*)/;
+            var commentedPubKey = pak.replace(re,
+              "-----BEGIN PGP PUBLIC KEY BLOCK-----\n" +
+              comment_1 + "\n" +
+              comment_2 + "\n" +
+              comment_3 + "\n" +
+              "$1"
+            );
 
-                    setCryptoPubKey(data.publicKey);
-                    setCryptoSignature(data.signature);
-                    setSignedPublicArmoredKeyText(result);
+            setCryptoPubKey(cryptoPubKey);
+            setCryptoSignature(signature);
+            setSignedPublicArmoredKeyText(commentedPubKey);
 
-                       fetch(SUBKEY_API_URL_ADD, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            keytext: publicArmoredKey,
-                            cryptoAddress: address,
-                            cryptoDomainName: domainName,
-                            cryptoPubKey: data.publicKey,
-                            cryptoSignature: data.signature,
-                        })
-                    });
-                },
+            const resp = await fetch(SUBKEY_API_URL_ADD, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                keytext: publicArmoredKey,
+                cryptoAddress: address,
+                cryptoDomainName: domainName,
+                cryptoPubKey: cryptoPubKey,
+                cryptoSignature: signature,
+              })
             });
+            if (resp.ok) {
+              const respText = await resp.text();
+              setSignedPublicArmoredKeyText(respText + "\n\n" + commentedPubKey);
+            } else {
+              setSignedPublicArmoredKeyText('Error adding key');
+            }
             result.current.scrollIntoView();
         } catch (err) {
             console.log(err);

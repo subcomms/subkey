@@ -40,7 +40,10 @@ class HKP {
     }
     const origin = util.origin(request);
     await this._publicKey.put({publicKeyArmored, cryptoAddress, cryptoDomainName, cryptoPubKey, cryptoSignature, origin, i18n: request.i18n});
-    return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
+    if (cryptoAddress && cryptoAddress.length > 0) {
+	    return h.response('Upload successful.').code(200);
+	  }
+		return h.response('Upload successful. Check your inbox to verify your email address.').code(200);
   }
 
   /**
