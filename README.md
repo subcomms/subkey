@@ -1,7 +1,9 @@
 Subkey Keyserver
 ====================
 
-A simple OpenPGP public key server that serves keys signed by a crypto-wallet.
+Ever wished you could use your Ethereum or Stacks/BTC crypto keys to sign a GPG public key for secure communication?
+
+Subkey is a simple OpenPGP public key server that serves keys signed by a crypto-wallet for ethereum or stacks.
 
 ### Usability
 
@@ -187,10 +189,15 @@ Note: You may also use [FerretDB](https://ferretdb.com), which aims to provide a
 ### Docker
 
 There are 3 environments available: dev, test, and prod
+There are 2 cryptos supported: stacks and ethereum
 
 To build the docker containers, run the build script from the top level directory.
 ```shell
-bash docker/build.sh dev
+bash docker/build.sh test stacks
+```
+or
+```shell
+bash docker/build.sh dev ethereum
 ```
 
 Then open a browser and visit: [Subkey](https://localhost:5173/)
